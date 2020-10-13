@@ -1,0 +1,17 @@
+test: 'variables.yml'
+vcenter_hostname: 10.48.170.23
+vcenter_username: "administrator@dom.local"
+vcenter_password: "C!sc0123"
+vms:
+-   name: k8s-master
+    mac1: "01"
+    mac2: "02"
+    ip1: "10.48.170.181"
+-   name: k8s-worker-1
+    mac1: "03"
+    mac2: "04"
+    ip1: "10.48.170.182"
+-   name: k8s-worker-2
+    mac1: "05"
+    mac2: "06"
+    ip1: "10.48.170.183"

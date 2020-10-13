@@ -1,0 +1,20 @@
+[localhost]
+localhost ansible_host=127.0.0.1 ansible_ssh_pass=cisco
+
+[group1]
+server41 ansible_host=10.48.170.41 ansible_ssh_pass=cisco
+
+[vc]
+vc1 ansible_host=10.48.170.21
+
+[k8s:children]
+master
+workers
+
+[master]
+master ansible_host=10.48.170.181 ansible_ssh_pass=cisco
+
+[workers]
+worker1 ansible_host=10.48.170.182 ansible_ssh_pass=cisco
+worker2 ansible_host=10.48.170.183 ansible_ssh_pass=cisco
+

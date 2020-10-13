@@ -1,0 +1,143 @@
+-
+  name: create virtual machines on vcenter
+  hosts: localhost
+  tasks:
+    - include_vars: vars.yml
+    - name: Create a virtual machine from a template
+      vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        name: "{{ item.name }}"
+        state: poweredon
+        template: centos_clean
+        folder: /Demo
+        datacenter: DC1
+        disk:
+        - size_gb: 50
+          type: thin
+          datastore: datastore1
+        - size_gb: 100
+          type: thin
+          datastore: datastore1
+        hardware:
+          memory_mb: 8192
+          num_cpus: 1
+          num_cpu_cores_per_socket: 1
+          scsi: paravirtual
+          memory_reservation_lock: True
+          mem_limit: 8096
+          max_connections: 5
+          hotadd_cpu: True
+          hotremove_cpu: True
+          hotadd_memory: False
+          boot_firmware: "efi"
+        networks:
+        - name: VM Network
+          ip: "{{ item.ip1 }}"
+          netmask: 255.255.255.0
+          gateway: 10.48.170.1
+          mac: "00:00:ca:fe:00:{{ item.mac1 }}"
+          dns_servers:
+           - 10.48.170.50
+           - 144.254.71.184
+        - name: VM Network
+          mac: "00:00:ca:fe:00:{{ item.mac2 }}"
+        wait_for_ip_address: yes
+      delegate_to: localhost
+      register: deploy
+      delegate_to: localhost
+      loop: "{{ vms }}"
+-
+  name: add hostname
+  hosts: k8s
+  gather_facts: true
+  tasks:
+    - include_vars: vars.yml
+    - name: hostname 
+      command: "hostname {{ inventory_hostname }}"
+    - name: modify hostname
+      hostname: name="{{ inventory_hostname }}"
+    - name: Add k8s repository
+      yum_repository:
+        name: kubernetes
+        description: K8s YUM repo
+        baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+        gpgcheck: yes
+        gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+        repo_gpgcheck: yes
+        enabled: yes
+    - name: Add docker repository
+      command: "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
+    - name: update packages
+      yum: 
+        name: '*'
+        state: latest
+    - name: install docker
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - yum-utils
+        - device-mapper-persistent-data
+        - lvm2
+        - docker
+    - name: Install a list of packages with a list variable
+      yum:
+        name: "{{ packages }}"
+      vars:
+        packages:
+        - kubelet
+        - kubeadm
+        - kubectl
+    - name: start processes
+      systemd:
+        name: kubelet
+        state: started
+        enabled: yes
+    - name: Generate /etc/hosts file
+      template:
+        src=hosts.j2
+        dest=/etc/hosts
+    - name: do permit traffic in default zone on port 6443/tcp
+      ansible.posix.firewalld:
+        port: 6443/tcp
+        permanent: yes
+        state: enabled
+    - name: do permit traffic in default zone on port 6443/tcp
+      ansible.posix.firewalld:
+        port: 2379-2380/tcp
+        permanent: yes
+        state: enabled
+    - name: do permit traffic in default zone on port 6443/tcp
+      ansible.posix.firewalld:
+        port: 10250-10252/tcp
+        permanent: yes
+        state: enabled
+    - name: do permit traffic in default zone on port 6443/tcp
+      ansible.posix.firewalld:
+        port: 10255/tcp
+        permanent: yes
+        state: enabled
+    - name: restart firewalld
+      command: "firewall-cmd --reload"
+    - name: modify iptables for k8s
+      lineinfile:
+        path: /etc/sysctl.d/k8s.conf
+        line: "{{ item }}"
+        create: yes
+      loop:
+        - 'net.bridge.bridge-nf-call-ip6tables = 1'
+        - 'net.bridge.bridge-nf-call-iptables = 1'
+    - name: disable SELinux
+      command: "{{ item }}"
+      loop:
+        - "setenforce 0"
+        - "sed -i \'s/^SELINUX=enforcing$/SELINUX=permissive/\' /etc/selinux/config"
+    - name: disable SWAP
+      command: "{{ item }}"
+      loop:
+        - "sed -i \'/swap/d\' /etc/fstab"
+        - "swapoff -a"
